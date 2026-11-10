@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function active() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.enabled == true;
+    }
+    function member(chatId) {
+      let chat = get(/databases/$(database)/documents/chats/$(chatId));
+      return active() && chat.data.state == 'active' && request.auth.uid in chat.data.members;
+    }
+    match /users/{userId} {
+      allow read: if active();
+      allow write: if false;
+    }
+    match /chats/{chatId} {
+      allow read: if active() && request.auth.uid in resource.data.members;
+      allow write: if false;
+      match /messages/{messageId} {
+        allow read: if member(chatId);
+        allow write: if false;
+      }
+    }
+  }
+}
